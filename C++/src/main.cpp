@@ -12,6 +12,7 @@
 #define FLOW_FIELD_WIDTH 120
 #define FLOW_FIELD_HEIGHT 120
 #define N_STEPS 30
+#define MIN_STEPS_ALLOWED 5
 #define N_CURVES 1500
 #define STEP_LENGTH 0.01 * FLOW_FIELD_WIDTH
 #define D_SEP 0.8
@@ -223,6 +224,72 @@ public:
 };
 
 
+class SeedPointsQueue {
+public:
+	std::vector<Point> _points;
+	int _capacity;
+	int _space_used;
+
+public:
+	SeedPointsQueue(int n_steps) {
+		_capacity = n_steps * 2;
+		_space_used = 0;
+		_points.reserve(n_steps * 2);
+	}
+
+	bool is_empty() {
+		return _space_used == 0;
+	}
+
+	void insert_coord(double x, double y) {
+		Point p = {x, y};
+		_points[_space_used] = p;
+		_space_used++;
+	}
+
+	void insert_point(Point p) {
+		_points[_space_used] = p;
+		_space_used++;
+	}
+};
+
+
+
+SeedPointsQueue collect_seedpoints (Curve* curve) {
+	int steps_taken = curve->_steps_taken;
+	SeedPointsQueue queue = SeedPointsQueue(steps_taken);
+	if (steps_taken == 0) {
+		return queue;
+	}
+
+	for (int i = 0; i < steps_taken - 1; i++) {
+		double x = curve->_x[i];
+		double y = curve->_y[i];
+			
+		int ff_column_index = (int) floor(x);
+		int ff_row_index = (int) floor(y);
+		double angle = atan2(curve->_y[i + 1] - y, curve->_x[i + 1] - x);
+
+		double angle_left = angle + (M_PI / 2);
+		double angle_right = angle - (M_PI / 2);
+
+		Point left_point = {
+			x + (D_SEP * cos(angle_left)),
+			y + (D_SEP * sin(angle_left))
+		};
+		Point right_point = {
+			x + (D_SEP * cos(angle_right)),
+			y + (D_SEP * sin(angle_right))
+		};
+
+		queue.insert_point(left_point);	
+		queue.insert_point(right_point);	
+	}
+
+	return queue;
+}
+
+
 
 
 Curve draw_curve(int curve_id,
@@ -285,22 +352,89 @@ Curve draw_curve(int curve_id,
 }
 
 
+std::vector<Curve> even_spaced_curves(double x_start,
+				      double y_start,
+				      int n_curves,
+				      int n_steps,
+				      int min_steps_allowed,
+				      double step_length,
+				      double d_sep,
+				      FlowField* flow_field,
+			              DensityGrid* density_grid) {
+ 
+	std::vector<Curve> curves;
+	curves.reserve(N_CURVES);
+	double x = x_start;
+	double y = y_start;
+	int curve_array_index = 0;
+	int curve_id = 0;
+	curves[curve_array_index] = draw_curve(
+		curve_id,
+		x, y,
+		n_steps,
+		step_length,
+		d_sep,
+		flow_field,
+		density_grid
+	);
+
+	density_grid->insert_curve_coords(&curves[curve_array_index]);
+	curve_array_index++;
+
+
+	while (curve_id < n_curves && curve_array_index < n_curves) {
+		SeedPointsQueue queue = SeedPointsQueue(n_steps);
+		queue = collect_seedpoints(&curves[curve_id]);
+		for (Point p : queue._points) {
+			// check if it is valid given the current state
+			if (density_grid->is_valid_next_step(p.x, p.y)) {
+				// if it is, draw the curve from it
+				Curve curve = draw_curve(
+					curve_array_index,
+					p.x, p.y,
+					n_steps,
+					step_length,
+					d_sep,
+					flow_field,
+					density_grid
+				);
+
+				if (curve._steps_taken < min_steps_allowed) {
+					continue;
+				}
+
+				curves[curve_array_index] = curve;
+				// insert this new curve into the density grid
+				density_grid->insert_curve_coords(&curve);
+				curve_array_index++;
+			}
+		}
+
+		curve_id++;
+	}
+
+
+
+	return curves;
+}
+
+
+
+
 
 int main() {
-
 	FlowField flow_field = FlowField();
 	DensityGrid density_grid = DensityGrid(D_SEP, 5000);
-	Curve curve = draw_curve(
-		0,
+	std::vector<Curve> curves = even_spaced_curves(
 		45.0, 24.0,
+		N_CURVES,
 		N_STEPS,
+		MIN_STEPS_ALLOWED,
 		STEP_LENGTH,
 		D_SEP,
 		&flow_field,
 		&density_grid
 	);
-
-	density_grid.insert_curve_coords(&curve);
 
 
 	return 1;
