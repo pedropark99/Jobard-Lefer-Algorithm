@@ -1,8 +1,10 @@
 // C Math Library
+#include <cwchar>
 #include <math.h>
 
 // C++ STD Libraries
 #include <vector>
+#include <iostream>
 
 #define FNL_IMPL
 #include "FastNoiseLite.h"
@@ -14,18 +16,11 @@
 #define STEP_LENGTH 0.01 * FLOW_FIELD_WIDTH
 #define D_SEP 0.8
 #define DENSITY_GRID_WIDTH ((int) (FLOW_FIELD_WIDTH / D_SEP))
+#define DENSITY_GRID_HEIGHT ((int) (FLOW_FIELD_HEIGHT / D_SEP))
 
 
 
-int get_density_col (double x, double d_sep) {
-	double c = (x / d_sep) + 1;
-	return (int) c;
-}
 
-int get_density_row (double y, double d_sep) {
-	double r = (y / d_sep) + 1;
-	return (int) r;
-}
 
 double distance (double x1, double y1, double x2, double y2) {
 	double s1 = pow(x2 - x1, 2.0);
@@ -33,14 +28,6 @@ double distance (double x1, double y1, double x2, double y2) {
 	return sqrt(s1 + s2);
 }
 
-bool off_boundaries (double x, double y, int limit) {
-	return (
-		x <= 0 ||
-		y <= 0 ||
-		x >= limit ||
-		y >= limit
-	);
-}
 
 
 class FlowField {
@@ -69,6 +56,15 @@ public:
 		return (int) y;
 	}
 
+	bool off_boundaries(double x, double y) {
+		return (
+			x <= 0 ||
+			y <= 0 ||
+			x >= FLOW_FIELD_WIDTH ||
+			y >= FLOW_FIELD_HEIGHT
+		);
+	}
+
 	double get_angle(double x, double y) {
 		int xi = get_flow_field_col(x);
 		int yi = get_flow_field_row(y);
@@ -83,10 +79,229 @@ struct Point {
 };
 
 
+class Curve {
+public:
+	int _curve_id;
+	std::vector<double> _x;
+	std::vector<double> _y;
+	std::vector<int> _direction;
+	std::vector<int> _step_id;
+	int _steps_taken;
+public:
+	Curve(int id, int n_steps) {
+		_curve_id = id;
+		_steps_taken = 0;
+		_x.reserve(n_steps);
+		_y.reserve(n_steps);
+		_direction.reserve(n_steps);
+		_step_id.reserve(n_steps);
+	}
+
+	void insert_step(double x_coord, double y_coord, int direction_id) {
+		_x[_steps_taken] = x_coord;
+		_y[_steps_taken] = y_coord;
+		_direction[_steps_taken] = direction_id;
+		_step_id[_steps_taken] = _steps_taken;
+		_steps_taken++;
+	}
+};
+
+
+struct DensityCell {
+	std::vector<double> x;
+	std::vector<double> y;
+	int capacity;
+	int space_used;
+};
+
+
+class DensityGrid {
+private:
+	DensityCell _grid[DENSITY_GRID_WIDTH][DENSITY_GRID_HEIGHT];
+	int _width;
+	int _height;
+	double _d_sep;
+public:
+	DensityGrid(double d_sep, int cell_capacity) {
+		_d_sep = d_sep;
+		_width = DENSITY_GRID_WIDTH;
+		_height = DENSITY_GRID_HEIGHT;
+		for (int r = 0; r < _height; r++) {
+			for (int c = 0; c < _width; c++) {
+				_grid[c][r].x.reserve(cell_capacity);
+				_grid[c][r].y.reserve(cell_capacity);
+				_grid[c][r].capacity = cell_capacity;
+				_grid[c][r].space_used = 0;
+			}
+		}
+	}
+
+	int get_density_col (double x) {
+		double c = (x / _d_sep) + 1;
+		return (int) c;
+	}
+
+	int get_density_row (double y) {
+		double r = (y / _d_sep) + 1;
+		return (int) r;
+	}
+
+	bool off_boundaries(double x, double y) {
+		int c = get_density_col(x);
+		int r = get_density_row(y);
+		return (
+			x <= 0 ||
+			y <= 0 ||
+			x >= _width ||
+			y >= _height
+		);
+	}
+
+	void insert_coord(double x, double y) {
+		if (off_boundaries(x, y)) {
+			return;
+		}
+
+		int density_col = get_density_col(x);
+		int density_row = get_density_row(y);
+
+		int space_used = _grid[density_col][density_row].space_used;
+		int capacity = _grid[density_col][density_row].capacity;
+
+		if ((space_used + 1) < capacity) {
+			_grid[density_col][density_row].x[space_used] = x;
+			_grid[density_col][density_row].y[space_used] = y;
+			_grid[density_col][density_row].space_used++;
+		} else {
+			std::cout << "[ERROR]: Attempt to add coordinate in density cell that is out of capacity!" << std::endl;
+		}
+	}
+
+	void insert_curve_coords(Curve* curve) {
+		int steps_taken = curve->_steps_taken;
+		for (int i = 0; i < steps_taken; i++) {
+			insert_coord(curve->_x[i], curve->_y[i]);
+		}
+	}
+
+	bool is_valid_next_step(double x, double y) {
+		if (off_boundaries(x, y)) {
+			return 0;
+		}
+
+		int density_col = get_density_col(x);
+		int density_row = get_density_row(y);
+
+		int start_row = (density_row - 1) > 0 ? density_row - 1 : 0;
+		int end_row = (density_row + 1) < _width ? density_row + 1 : density_row; 
+		int start_col = (density_col - 1) > 0 ? density_col - 1 : 0;
+		int end_col = (density_col + 1) < _height ? density_col + 1 : density_col;
+
+		// Subtracting a very small amount from D_TEST, just to account for the lost of float precision
+		// that happens during the calculations below, specially in the distance calc
+		double d_test = _d_sep - (0.01 * _d_sep);
+		for (int c = start_col; c <= end_col; c++) {
+			for (int r = start_row; r <= end_row; r++) {
+				int n_elements = _grid[c][r].space_used;
+				if (n_elements == 0) {
+					continue;
+				}
+
+				for (int i = 0; i < n_elements; i++) {
+					double x2 = _grid[c][r].x[i];
+					double y2 = _grid[c][r].y[i];
+					double dist = distance(x, y, x2, y2);
+					if (dist <= d_test) {
+						return 0;
+					}
+				}
+			}
+		}
+
+		return 1;
+	}
+};
+
+
+
+
+Curve draw_curve(int curve_id,
+		 double x_start,
+		 double y_start,
+		 int n_steps,
+		 double step_length,
+		 double d_sep,
+		 FlowField* flow_field,
+		 DensityGrid* density_grid) {
+
+	Curve curve = Curve(curve_id, n_steps);
+	curve.insert_step(x_start, y_start, 0);
+	double x = x_start;
+	double y = y_start;
+	int i = 1;
+	// Draw curve from right to left
+	while (i < (n_steps / 2)) {
+		if (flow_field->off_boundaries(x, y)) {
+			break;
+		}
+		
+		double angle = flow_field->get_angle(x, y);
+		double x_step = step_length * cos(angle);
+		double y_step = step_length * sin(angle);
+		x = x - x_step;
+		y = y - y_step;
+
+		if (!density_grid->is_valid_next_step(x, y)) {
+			break;
+		}
+
+		curve.insert_step(x, y, 0);
+		i++;
+	}
+
+	x = x_start;
+	y = y_start;
+	// Draw curve from left to right
+	while (i < n_steps) {
+		if (flow_field->off_boundaries(x, y)) {
+			break;
+		}
+		
+		double angle = flow_field->get_angle(x, y);
+		double x_step = step_length * cos(angle);
+		double y_step = step_length * sin(angle);
+		x = x + x_step;
+		y = y + y_step;
+
+		if (!density_grid->is_valid_next_step(x, y)) {
+			break;
+		}
+
+		curve.insert_step(x, y, 1);
+		i++;
+	}
+
+	return curve;
+}
+
+
 
 int main() {
 
-	FlowField f = FlowField();
+	FlowField flow_field = FlowField();
+	DensityGrid density_grid = DensityGrid(D_SEP, 5000);
+	Curve curve = draw_curve(
+		0,
+		45.0, 24.0,
+		N_STEPS,
+		STEP_LENGTH,
+		D_SEP,
+		&flow_field,
+		&density_grid
+	);
+
+	density_grid.insert_curve_coords(&curve);
+
 
 	return 1;
 }
