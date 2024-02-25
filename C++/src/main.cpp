@@ -1,4 +1,5 @@
 // C Math Library
+#include <cmath>
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -396,6 +397,10 @@ std::vector<Curve> even_spaced_curves(double x_start,
 
 	while (curve_id < n_curves && curve_array_index < n_curves) {
 		SeedPointsQueue queue = SeedPointsQueue(n_steps);
+		if (curve_id >= curves.size()) {
+			// There is no more curves to be analyzed in the queue
+			break;
+		}
 		queue = collect_seedpoints(&curves.at(curve_id));
 		for (Point p: queue._points) {
 			// check if it is valid given the current state
@@ -430,10 +435,10 @@ std::vector<Curve> even_spaced_curves(double x_start,
 	return curves;
 }
 
-void export_curves(char* filename, std::vector<Curve> curves, int n_curves) {
+void export_curves(char* filename, std::vector<Curve>* curves) {
 	FILE* file = fopen(filename, "w");
 	fprintf(file, "curve_id;step_id;direction;x;y\n");
-	for (Curve curve: curves) {
+	for (Curve curve: *curves) {
 		int steps_taken = curve._steps_taken;
 		for (int i = 0; i < steps_taken; i++) {
 			fprintf(
@@ -470,25 +475,7 @@ int main() {
 	char filename_c[filename.length() + 1];
 	strcpy(filename_c, filename.c_str());
 	
-	/*
-	FILE* file = fopen(filename_c, "w");
-	fprintf(file, "curve_id;step_id;direction;x;y\n");
-	for (int curve_id = 0; curve_id < N_CURVES; curve_id++) {
-		int steps_taken = curves[curve_id]._steps_taken;
-		for (int i = 0; i < steps_taken; i++) {
-			fprintf(
-				file,
-				"%d;%d;%d;%.9f;%.9f\n",
-				curves[curve_id]._curve_id,
-				curves[curve_id]._step_id[i],
-				curves[curve_id]._direction[i],
-				curves[curve_id]._x[i],
-				curves[curve_id]._y[i]
-			);
-		}
-	}
-
-	fclose(file);*/
+	export_curves(filename_c, &curves);
 
 
 	return 1;
