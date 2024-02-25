@@ -1,10 +1,15 @@
 // C Math Library
-#include <cwchar>
 #include <math.h>
+#include <stdio.h>
+#include <string.h>
 
 // C++ STD Libraries
 #include <vector>
 #include <iostream>
+#include <fstream>
+
+
+
 
 #define FNL_IMPL
 #include "FastNoiseLite.h"
@@ -18,8 +23,6 @@
 #define D_SEP 0.8
 #define DENSITY_GRID_WIDTH ((int) (FLOW_FIELD_WIDTH / D_SEP))
 #define DENSITY_GRID_HEIGHT ((int) (FLOW_FIELD_HEIGHT / D_SEP))
-
-
 
 
 
@@ -385,7 +388,8 @@ std::vector<Curve> even_spaced_curves(double x_start,
 	while (curve_id < n_curves && curve_array_index < n_curves) {
 		SeedPointsQueue queue = SeedPointsQueue(n_steps);
 		queue = collect_seedpoints(&curves[curve_id]);
-		for (Point p : queue._points) {
+		for (int i = 0; i < queue._space_used; i++) {
+			Point p = queue._points[i];
 			// check if it is valid given the current state
 			if (density_grid->is_valid_next_step(p.x, p.y)) {
 				// if it is, draw the curve from it
@@ -418,8 +422,26 @@ std::vector<Curve> even_spaced_curves(double x_start,
 	return curves;
 }
 
+void export_curves(char* filename, std::vector<Curve>* curves) {
+	FILE* file = fopen(filename, "w");
+	fprintf(file, "curve_id;step_id;direction;x;y\n");
+	for (Curve curve : *curves) {
+		int steps_taken = curve._steps_taken;
+		for (int i = 0; i < steps_taken; i++) {
+			fprintf(
+				file,
+				"%d;%d;%d;%.9f;%.9f\n",
+				curve._curve_id,
+				curve._step_id[i],
+				curve._direction[i],
+				curve._x[i],
+				curve._y[i]
+			);
+		}
+	}
 
-
+	fclose(file);
+}
 
 
 int main() {
@@ -435,6 +457,13 @@ int main() {
 		&flow_field,
 		&density_grid
 	);
+
+	std::string filename = "test.csv";
+	char filename_c[filename.length() + 1];
+	strcpy(filename_c, filename.c_str());
+	
+
+	export_curves(filename_c, &curves);
 
 
 	return 1;
