@@ -1,3 +1,4 @@
+even_spaced_curves
 *.cmake
 **/CMakeCache.txt
 Makefile
