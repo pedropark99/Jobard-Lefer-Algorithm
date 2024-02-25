@@ -102,11 +102,15 @@ public:
 	}
 
 	void insert_step(double x_coord, double y_coord, int direction_id) {
-		_x[_steps_taken] = x_coord;
-		_y[_steps_taken] = y_coord;
-		_direction[_steps_taken] = direction_id;
-		_step_id[_steps_taken] = _steps_taken;
+		_x.emplace_back(x_coord);
+		_y.emplace_back(y_coord);
+		_direction.emplace_back(direction_id);
+		_step_id.emplace_back(_steps_taken);
 		_steps_taken++;
+	}
+
+	int isteps_taken() {
+		return _x.size();
 	}
 };
 
@@ -141,12 +145,12 @@ public:
 	}
 
 	int get_density_col (double x) {
-		double c = (x / _d_sep) + 1;
+		double c = (x / _d_sep);
 		return (int) c;
 	}
 
 	int get_density_row (double y) {
-		double r = (y / _d_sep) + 1;
+		double r = (y / _d_sep);
 		return (int) r;
 	}
 
@@ -154,10 +158,10 @@ public:
 		int c = get_density_col(x);
 		int r = get_density_row(y);
 		return (
-			x <= 0 ||
-			y <= 0 ||
-			x >= _width ||
-			y >= _height
+			c <= 0 ||
+			r <= 0 ||
+			c >= _width ||
+			r >= _height
 		);
 	}
 
@@ -173,8 +177,8 @@ public:
 		int capacity = _grid[density_col][density_row].capacity;
 
 		if ((space_used + 1) < capacity) {
-			_grid[density_col][density_row].x[space_used] = x;
-			_grid[density_col][density_row].y[space_used] = y;
+			_grid[density_col][density_row].x.emplace_back(x);
+			_grid[density_col][density_row].y.emplace_back(y);
 			_grid[density_col][density_row].space_used++;
 		} else {
 			std::cout << "[ERROR]: Attempt to add coordinate in density cell that is out of capacity!" << std::endl;
@@ -184,7 +188,7 @@ public:
 	void insert_curve_coords(Curve* curve) {
 		int steps_taken = curve->_steps_taken;
 		for (int i = 0; i < steps_taken; i++) {
-			insert_coord(curve->_x[i], curve->_y[i]);
+			insert_coord(curve->_x.at(i), curve->_y.at(i));
 		}
 	}
 
@@ -212,8 +216,8 @@ public:
 				}
 
 				for (int i = 0; i < n_elements; i++) {
-					double x2 = _grid[c][r].x[i];
-					double y2 = _grid[c][r].y[i];
+					double x2 = _grid[c][r].x.at(i);
+					double y2 = _grid[c][r].y.at(i);
 					double dist = distance(x, y, x2, y2);
 					if (dist <= d_test) {
 						return 0;
@@ -246,12 +250,12 @@ public:
 
 	void insert_coord(double x, double y) {
 		Point p = {x, y};
-		_points[_space_used] = p;
+		_points.emplace_back(p);
 		_space_used++;
 	}
 
 	void insert_point(Point p) {
-		_points[_space_used] = p;
+		_points.emplace_back(p);
 		_space_used++;
 	}
 };
@@ -266,12 +270,12 @@ SeedPointsQueue collect_seedpoints (Curve* curve) {
 	}
 
 	for (int i = 0; i < steps_taken - 1; i++) {
-		double x = curve->_x[i];
-		double y = curve->_y[i];
+		double x = curve->_x.at(i);
+		double y = curve->_y.at(i);
 			
 		int ff_column_index = (int) floor(x);
 		int ff_row_index = (int) floor(y);
-		double angle = atan2(curve->_y[i + 1] - y, curve->_x[i + 1] - x);
+		double angle = atan2(curve->_y.at(i + 1) - y, curve->_x.at(i + 1) - x);
 
 		double angle_left = angle + (M_PI / 2);
 		double angle_right = angle - (M_PI / 2);
@@ -366,12 +370,16 @@ std::vector<Curve> even_spaced_curves(double x_start,
 			              DensityGrid* density_grid) {
  
 	std::vector<Curve> curves;
-	curves.reserve(N_CURVES);
+	curves.reserve(n_curves);
+	/*for (int curve_id = 0; curve_id < n_curves; curve_id++) {
+		curves[curve_id] = Curve(curve_id, n_steps);
+	}*/
+
 	double x = x_start;
 	double y = y_start;
 	int curve_array_index = 0;
 	int curve_id = 0;
-	curves[curve_array_index] = draw_curve(
+	Curve curve = draw_curve(
 		curve_id,
 		x, y,
 		n_steps,
@@ -381,15 +389,15 @@ std::vector<Curve> even_spaced_curves(double x_start,
 		density_grid
 	);
 
-	density_grid->insert_curve_coords(&curves[curve_array_index]);
+	curves.emplace_back(curve);
+	density_grid->insert_curve_coords(&curve);
 	curve_array_index++;
 
 
 	while (curve_id < n_curves && curve_array_index < n_curves) {
 		SeedPointsQueue queue = SeedPointsQueue(n_steps);
-		queue = collect_seedpoints(&curves[curve_id]);
-		for (int i = 0; i < queue._space_used; i++) {
-			Point p = queue._points[i];
+		queue = collect_seedpoints(&curves.at(curve_id));
+		for (Point p: queue._points) {
 			// check if it is valid given the current state
 			if (density_grid->is_valid_next_step(p.x, p.y)) {
 				// if it is, draw the curve from it
@@ -407,7 +415,7 @@ std::vector<Curve> even_spaced_curves(double x_start,
 					continue;
 				}
 
-				curves[curve_array_index] = curve;
+				curves.emplace_back(curve);
 				// insert this new curve into the density grid
 				density_grid->insert_curve_coords(&curve);
 				curve_array_index++;
@@ -422,20 +430,20 @@ std::vector<Curve> even_spaced_curves(double x_start,
 	return curves;
 }
 
-void export_curves(char* filename, std::vector<Curve>* curves) {
+void export_curves(char* filename, std::vector<Curve> curves, int n_curves) {
 	FILE* file = fopen(filename, "w");
 	fprintf(file, "curve_id;step_id;direction;x;y\n");
-	for (Curve curve : *curves) {
+	for (Curve curve: curves) {
 		int steps_taken = curve._steps_taken;
 		for (int i = 0; i < steps_taken; i++) {
 			fprintf(
 				file,
 				"%d;%d;%d;%.9f;%.9f\n",
 				curve._curve_id,
-				curve._step_id[i],
-				curve._direction[i],
-				curve._x[i],
-				curve._y[i]
+				curve._step_id.at(i),
+				curve._direction.at(i),
+				curve._x.at(i),
+				curve._y.at(i)
 			);
 		}
 	}
@@ -462,8 +470,25 @@ int main() {
 	char filename_c[filename.length() + 1];
 	strcpy(filename_c, filename.c_str());
 	
+	/*
+	FILE* file = fopen(filename_c, "w");
+	fprintf(file, "curve_id;step_id;direction;x;y\n");
+	for (int curve_id = 0; curve_id < N_CURVES; curve_id++) {
+		int steps_taken = curves[curve_id]._steps_taken;
+		for (int i = 0; i < steps_taken; i++) {
+			fprintf(
+				file,
+				"%d;%d;%d;%.9f;%.9f\n",
+				curves[curve_id]._curve_id,
+				curves[curve_id]._step_id[i],
+				curves[curve_id]._direction[i],
+				curves[curve_id]._x[i],
+				curves[curve_id]._y[i]
+			);
+		}
+	}
 
-	export_curves(filename_c, &curves);
+	fclose(file);*/
 
 
 	return 1;
