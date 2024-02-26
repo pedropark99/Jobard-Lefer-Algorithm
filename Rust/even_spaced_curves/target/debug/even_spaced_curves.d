@@ -1,0 +1,1 @@
+/home/pedro-dev/Documents/Projetos/Packages/Jobard-Lefer-Algorithm/Rust/even_spaced_curves/target/debug/even_spaced_curves: /home/pedro-dev/Documents/Projetos/Packages/Jobard-Lefer-Algorithm/Rust/even_spaced_curves/src/main.rs
