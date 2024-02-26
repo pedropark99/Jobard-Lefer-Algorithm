@@ -1,4 +1,5 @@
-use noise::Perlin;
+use noise::{NoiseFn, Perlin, Seedable};
+use array2d::{Array2D, Error};
 
 fn main() {
 
@@ -13,7 +14,17 @@ fn main() {
     let density_grid_height = calc_density_dim(flow_field_height, d_sep);
 
     let noise_gen = Perlin::new(50);
-    // let flow_field: [f64, ]
+    let mut flow_field = Array2D::filled_with(
+        0 as f64,
+        flow_field_height.into(),
+        flow_field_width.into()
+    );
+
+    for y in 0..flow_field_height {
+        for x in 0..flow_field_width {
+            flow_field[(x as usize, y as usize)] = noise_gen.get([x as f64, y as f64]);
+        }
+    }
 
 
     println!("Hello, world!");
