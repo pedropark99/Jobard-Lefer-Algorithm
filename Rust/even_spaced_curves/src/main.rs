@@ -22,9 +22,18 @@ fn main() {
 
     for y in 0..flow_field_height {
         for x in 0..flow_field_width {
-            flow_field[(x as usize, y as usize)] = noise_gen.get([x as f64, y as f64]);
+            let xa = f64::from(x / flow_field_width);
+            lef ya = f64::from(y / flow_field_height);
+            println!("x:{} | y:{} | v:{}", x, y, noise_gen.get([xa, ya]));
+            // flow_field[(x as usize, y as usize)] = noise_gen.get([x as f64, y as f64]);
         }
     }
+
+    // for row_iter in flow_field.row_iter(0) {
+    //     for element in row_iter {
+    //         println!("{}", element);
+    //     }
+    // }
 
 
     println!("Hello, world!");
