@@ -82,12 +82,12 @@ fn distance(x1:f64, y1:f64, x2:f64, y2:f64) -> f64 {
 
 
 struct Curve {
-    _curve_id:u32,
-    _x:Vec<f64>,
-    _y:Vec<f64>,
-    _direction:Vec<u8>,
-    _step_id:Vec<u32>,
-    _steps_taken:u32
+    pub _curve_id:u32,
+    pub _x:Vec<f64>,
+    pub _y:Vec<f64>,
+    pub _direction:Vec<u8>,
+    pub _step_id:Vec<u32>,
+    pub _steps_taken:u32
 }
 
 impl Curve {
@@ -204,7 +204,7 @@ impl DensityGrid {
 
         let density_col = self.get_density_col(x);
         let density_row = self.get_density_row(y);
-    
+
         let mut start_row = 0;
         let mut end_row = 0;
         let mut start_col = 0;
@@ -260,141 +260,213 @@ impl DensityGrid {
 
 
 struct Point {
-	x:f64,
-	y:f64,
+    x:f64,
+    y:f64,
 }
 
 struct SeedPointsQueue {
-	_points:Vec<Point>,
-	_capacity:u32,
-	_space_used:u32,
+    _points:Vec<Point>,
+    _capacity:u32,
+    _space_used:u32,
 }
 
 
 impl SeedPointsQueue {
-	pub fn new(n_steps:u32) -> SeedPointsQueue {
-            let capacity = n_steps * 2;
-            SeedPointsQueue {
-		_capacity: capacity,
-		_space_used: 0,
-		_points: Vec::with_capacity(capacity as usize),
-            }
-	}
+    pub fn new(n_steps:u32) -> SeedPointsQueue {
+        let capacity = n_steps * 2;
+        SeedPointsQueue {
+            _capacity: capacity,
+            _space_used: 0,
+            _points: Vec::with_capacity(capacity as usize),
+        }
+    }
 
-	pub fn is_empty(&self) -> bool {
-		self._space_used == 0
-	}
+    pub fn is_empty(&self) -> bool {
+        self._space_used == 0
+    }
 
-	pub fn insert_coord(&mut self, x:f64, y:f64) {
-		let p = Point {x, y};
-		self._points.push(p);
-		self._space_used += 1;
-	}
+    pub fn insert_coord(&mut self, x:f64, y:f64) {
+        let p = Point {x, y};
+        self._points.push(p);
+        self._space_used += 1;
+    }
 
-	pub fn insert_point(&mut self, p:Point) {
-		self._points.push(p);
-		self._space_used += 1;
-	}
+    pub fn insert_point(&mut self, p:Point) {
+        self._points.push(p);
+        self._space_used += 1;
+    }
 }
 
 
 pub fn collect_seedpoints(curve:Curve, d_sep:f64) -> SeedPointsQueue {
-	let steps_taken = curve._steps_taken;
-        let m_pi = std::f64::consts::PI;
-	let mut queue = SeedPointsQueue::new(steps_taken);
-	if (steps_taken == 0) {
-		return queue
-	}
+    let steps_taken = curve._steps_taken;
+    let m_pi = std::f64::consts::PI;
+    let mut queue = SeedPointsQueue::new(steps_taken);
+    if (steps_taken == 0) {
+        return queue
+    }
 
-	for i in 0..(steps_taken - 1) {
-                let aus = i as usize;
-		let x = curve._x[aus];
-		let y = curve._y[aus];
-			
-		let ff_column_index = x.floor() as u8;
-		let ff_row_index = y.floor() as u8;
-		let angle = libm::atan2(curve._y[aus + 1] - y, curve._x[aus + 1] - x);
+    for i in 0..(steps_taken - 1) {
+        let aus = i as usize;
+        let x = curve._x[aus];
+        let y = curve._y[aus];
 
-		let angle_left = angle + (m_pi / 2.0);
-		let angle_right = angle - (m_pi / 2.0);
+        let ff_column_index = x.floor() as u8;
+        let ff_row_index = y.floor() as u8;
+        let angle = libm::atan2(curve._y[aus + 1] - y, curve._x[aus + 1] - x);
 
-		let left_point = Point {
-			x: x + (d_sep * libm::cos(angle_left)),
-			y: y + (d_sep * libm::sin(angle_left))
-		};
+        let angle_left = angle + (m_pi / 2.0);
+        let angle_right = angle - (m_pi / 2.0);
 
-		let right_point = Point {
-			x: x + (d_sep * libm::cos(angle_right)),
-			y: y + (d_sep * libm::sin(angle_right))
-		};
+        let left_point = Point {
+            x: x + (d_sep * libm::cos(angle_left)),
+            y: y + (d_sep * libm::sin(angle_left))
+        };
 
-		queue.insert_point(left_point);	
-		queue.insert_point(right_point);	
-	}
+        let right_point = Point {
+            x: x + (d_sep * libm::cos(angle_right)),
+            y: y + (d_sep * libm::sin(angle_right))
+        };
 
-	queue
+        queue.insert_point(left_point);	
+        queue.insert_point(right_point);	
+    }
+
+    queue
 }
 
 
 
 pub fn draw_curve(curve_id:u32,
-		 x_start:f64,
-		 y_start:f64,
-		 n_steps:u32,
-		 step_length:f64,
-		 flow_field:FlowField,
-		 density_grid:DensityGrid) -> Curve {
+    x_start:f64,
+    y_start:f64,
+    n_steps:u32,
+    step_length:f64,
+    flow_field:FlowField,
+    density_grid:DensityGrid) -> Curve {
 
-	let mut curve = Curve::new(curve_id, n_steps);
-	curve.insert_step(x_start, y_start, 0);
-	let mut x = x_start;
-	let mut y = y_start;
-	let mut i = 1;
-	// Draw curve from right to left
-	while i < (n_steps / 2) {
-		if (flow_field.off_boundaries(x, y)) {
-			break;
-		}
-		
-		let angle = flow_field.get_angle(x, y);
-		let x_step = step_length * libm::cos(angle);
-		let y_step = step_length * libm::sin(angle);
-		x = x - x_step;
-		y = y - y_step;
+    let mut curve = Curve::new(curve_id, n_steps);
+    curve.insert_step(x_start, y_start, 0);
+    let mut x = x_start;
+    let mut y = y_start;
+    let mut i = 1;
+    // Draw curve from right to left
+    while i < (n_steps / 2) {
+        if (flow_field.off_boundaries(x, y)) {
+            break;
+        }
 
-		if (!density_grid.is_valid_next_step(x, y)) {
-			break;
-		}
+        let angle = flow_field.get_angle(x, y);
+        let x_step = step_length * libm::cos(angle);
+        let y_step = step_length * libm::sin(angle);
+        x = x - x_step;
+        y = y - y_step;
 
-		curve.insert_step(x, y, 0);
-		i += 1;
-	}
+        if (!density_grid.is_valid_next_step(x, y)) {
+            break;
+        }
 
-	x = x_start;
-	y = y_start;
-	// Draw curve from left to right
-	while i < n_steps {
-		if (flow_field.off_boundaries(x, y)) {
-			break;
-		}
-		
-		let angle = flow_field.get_angle(x, y);
-		let x_step = step_length * libm::cos(angle);
-		let y_step = step_length * libm::sin(angle);
-		x = x + x_step;
-		y = y + y_step;
+        curve.insert_step(x, y, 0);
+        i += 1;
+    }
 
-		if (!density_grid.is_valid_next_step(x, y)) {
-			break;
-		}
+    x = x_start;
+    y = y_start;
+    // Draw curve from left to right
+    while i < n_steps {
+        if (flow_field.off_boundaries(x, y)) {
+            break;
+        }
 
-		curve.insert_step(x, y, 1);
-		i += 1;
-	}
+        let angle = flow_field.get_angle(x, y);
+        let x_step = step_length * libm::cos(angle);
+        let y_step = step_length * libm::sin(angle);
+        x = x + x_step;
+        y = y + y_step;
 
-	curve
+        if (!density_grid.is_valid_next_step(x, y)) {
+            break;
+        }
+
+        curve.insert_step(x, y, 1);
+        i += 1;
+    }
+
+    curve
 }
 
+
+
+pub fn even_spaced_curves(x_start:f64,
+    y_start:f64,
+    n_curves:u32,
+    n_steps:u32,
+    min_steps_allowed:u8,
+    step_length:f64,
+    d_sep:f64,
+    flow_field:FlowField,
+    density_grid:DensityGrid) -> Vec<Curve> {
+
+    let mut curves = Vec::with_capacity(n_curves as usize);
+    let mut curve_array_index = 0;
+    let mut curve_id = 0;
+    let mut density_grid = density_grid;
+
+    let x = x_start;
+    let y = y_start;
+    let curve = draw_curve(
+        curve_id,
+        x, y,
+        n_steps,
+        step_length,
+        flow_field,
+        density_grid
+    );
+
+    curves.push(curve);
+    density_grid.insert_curve_coords(curve);
+    curve_array_index += 1;
+
+
+    while curve_id < n_curves && curve_array_index < n_curves {
+        let mut queue = SeedPointsQueue::new(n_steps);
+        if (curve_id >= curves.len() as u32) {
+            // There is no more curves to be analyzed in the queue
+            break;
+        }
+        let curve_usize = curve_id as usize;
+        queue = collect_seedpoints(curves[curve_usize], d_sep);
+        for p in queue._points {
+            // check if it is valid given the current state
+            if (density_grid.is_valid_next_step(p.x, p.y)) {
+                // if it is, draw the curve from it
+                let curve = draw_curve(
+                    curve_array_index,
+                    p.x, p.y,
+                    n_steps,
+                    step_length,
+                    flow_field,
+                    density_grid
+                );
+
+            if (curve._steps_taken < min_steps_allowed as u32) {
+                    continue;
+                }
+
+                curves.push(curve);
+                // insert this new curve into the density grid
+                density_grid.insert_curve_coords(curve);
+                curve_array_index += 1;
+            }
+        }
+
+        curve_id += 1;
+    }
+
+
+
+    curves
+}
 
 
 
