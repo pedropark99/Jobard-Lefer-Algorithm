@@ -12,6 +12,20 @@ But you mmight find my article about this algorithm an useful resource as well:
 
 <https://pedro-faria.netlify.app/posts/2024/2024-02-19-flow-even/en/>
 
+# Build
+
+Both C and C++ projects use CMake to build the project. So, you can build them by running:
+
+```bash
+cmake .
+make
+```
+
+In contrast, the Rust project is built by running `cargo`:
+
+```bash
+cargo build
+```
 
 # An example of output
 
