@@ -1,9 +1,13 @@
-use noise::{NoiseFn, Perlin, Seedable};
-use array2d::{Array2D, Error};
+use std::fs::File;
+use std::io::{BufWriter, Write};
+use std::fmt;
+
+use noise::{NoiseFn, Perlin};
+use array2d::Array2D;
 use libm;
 
 
-struct FlowField {
+pub struct FlowField {
     field:Array2D<f64>,
     height:u8,
     width:u8
@@ -80,8 +84,7 @@ fn distance(x1:f64, y1:f64, x2:f64, y2:f64) -> f64 {
 //     vecc
 // }
 
-
-struct Curve {
+pub struct Curve {
     pub _curve_id:u32,
     pub _x:Vec<f64>,
     pub _y:Vec<f64>,
@@ -113,7 +116,7 @@ impl Curve {
 }
 
 #[derive(Clone)]
-struct DensityCell {
+pub struct DensityCell {
     x:Vec<f64>,
     y:Vec<f64>,
     capacity:u32,
@@ -129,7 +132,7 @@ pub fn empty_cell(cell_capacity:u32) -> DensityCell {
     }
 }
 
-struct DensityGrid {
+pub struct DensityGrid {
     _grid:Array2D<DensityCell>,
     _width:u8,
     _height:u8,
@@ -143,7 +146,7 @@ impl DensityGrid {
             _d_sep: d_sep,
             _width: width,
             _height: height,
-            _grid: Array2D::fill_with(empty_cell(cell_capacity), width.into(), height.into()),
+            _grid: Array2D::filled_with(empty_cell(cell_capacity), width.into(), height.into()),
         }
     }
 
@@ -169,7 +172,7 @@ impl DensityGrid {
     }
 
     pub fn insert_coord(&mut self, x:f64, y:f64) {
-        if (self.off_boundaries(x, y)) {
+        if self.off_boundaries(x, y) {
             return;
         }
 
@@ -179,7 +182,7 @@ impl DensityGrid {
         let space_used = self._grid[(density_col, density_row)].space_used;
         let capacity = self._grid[(density_col, density_row)].capacity;
 
-        if ((space_used + 1) < capacity) {
+        if (space_used + 1) < capacity {
             self._grid[(density_col, density_row)].x.push(x);
             self._grid[(density_col, density_row)].y.push(y);
             self._grid[(density_col, density_row)].space_used += 1;
@@ -188,7 +191,7 @@ impl DensityGrid {
         }
     }
 
-    fn insert_curve_coords(&mut self, curve:Curve){
+    fn insert_curve_coords(&mut self, curve:&Curve){
         let steps_taken = curve._steps_taken;
         for i in 0..steps_taken {
             let aus = i as usize;
@@ -198,7 +201,7 @@ impl DensityGrid {
 
 
     pub fn is_valid_next_step(&self, x:f64, y:f64) -> bool {
-        if (self.off_boundaries(x, y)) {
+        if self.off_boundaries(x, y) {
             return false
         }
 
@@ -209,25 +212,25 @@ impl DensityGrid {
         let mut end_row = 0;
         let mut start_col = 0;
         let mut end_col = 0;
-        if ((density_row - 1) > 0) {
+        if (density_row - 1) > 0 {
             start_row =  density_row - 1;
         } else {
             start_row = 0;
         }
 
-        if ((density_row + 1) < self._width.into()) {
+        if (density_row + 1) < self._width.into() {
             end_row = density_row + 1;
         } else {
             end_row = density_row; 
         }
 
-        if ((density_col - 1) > 0) {	
+        if (density_col - 1) > 0 {
             start_col = density_col - 1;
         } else {
             start_col = 0;
         }
 
-        if ((density_col + 1) < self._height.into()) {
+        if (density_col + 1) < self._height.into() {
             end_col = density_col + 1;
         } else {
             end_col = density_col;
@@ -239,7 +242,7 @@ impl DensityGrid {
         for c in start_col..= end_col {
             for r in start_row..=end_row {
                 let n_elements = self._grid[(c, r)].space_used;
-                if (n_elements == 0) {
+                if n_elements == 0 {
                     continue;
                 }
 
@@ -247,7 +250,7 @@ impl DensityGrid {
                     let x2 = self._grid[(c, r)].x[i as usize];
                     let y2 = self._grid[(c, r)].y[i as usize];
                     let dist = distance(x, y, x2, y2);
-                    if (dist <= d_test) {
+                    if dist <= d_test {
                         return false;
                     }
                 }
@@ -259,12 +262,12 @@ impl DensityGrid {
 }
 
 
-struct Point {
+pub struct Point {
     x:f64,
     y:f64,
 }
 
-struct SeedPointsQueue {
+pub struct SeedPointsQueue {
     _points:Vec<Point>,
     _capacity:u32,
     _space_used:u32,
@@ -281,16 +284,6 @@ impl SeedPointsQueue {
         }
     }
 
-    pub fn is_empty(&self) -> bool {
-        self._space_used == 0
-    }
-
-    pub fn insert_coord(&mut self, x:f64, y:f64) {
-        let p = Point {x, y};
-        self._points.push(p);
-        self._space_used += 1;
-    }
-
     pub fn insert_point(&mut self, p:Point) {
         self._points.push(p);
         self._space_used += 1;
@@ -298,11 +291,11 @@ impl SeedPointsQueue {
 }
 
 
-pub fn collect_seedpoints(curve:Curve, d_sep:f64) -> SeedPointsQueue {
+pub fn collect_seedpoints(curve:&Curve, d_sep:f64) -> SeedPointsQueue {
     let steps_taken = curve._steps_taken;
     let m_pi = std::f64::consts::PI;
     let mut queue = SeedPointsQueue::new(steps_taken);
-    if (steps_taken == 0) {
+    if steps_taken == 0 {
         return queue
     }
 
@@ -310,9 +303,6 @@ pub fn collect_seedpoints(curve:Curve, d_sep:f64) -> SeedPointsQueue {
         let aus = i as usize;
         let x = curve._x[aus];
         let y = curve._y[aus];
-
-        let ff_column_index = x.floor() as u8;
-        let ff_row_index = y.floor() as u8;
         let angle = libm::atan2(curve._y[aus + 1] - y, curve._x[aus + 1] - x);
 
         let angle_left = angle + (m_pi / 2.0);
@@ -342,8 +332,8 @@ pub fn draw_curve(curve_id:u32,
     y_start:f64,
     n_steps:u32,
     step_length:f64,
-    flow_field:FlowField,
-    density_grid:DensityGrid) -> Curve {
+    flow_field:&FlowField,
+    density_grid:&DensityGrid) -> Curve {
 
     let mut curve = Curve::new(curve_id, n_steps);
     curve.insert_step(x_start, y_start, 0);
@@ -352,7 +342,7 @@ pub fn draw_curve(curve_id:u32,
     let mut i = 1;
     // Draw curve from right to left
     while i < (n_steps / 2) {
-        if (flow_field.off_boundaries(x, y)) {
+        if flow_field.off_boundaries(x, y) {
             break;
         }
 
@@ -362,7 +352,7 @@ pub fn draw_curve(curve_id:u32,
         x = x - x_step;
         y = y - y_step;
 
-        if (!density_grid.is_valid_next_step(x, y)) {
+        if !density_grid.is_valid_next_step(x, y) {
             break;
         }
 
@@ -374,7 +364,7 @@ pub fn draw_curve(curve_id:u32,
     y = y_start;
     // Draw curve from left to right
     while i < n_steps {
-        if (flow_field.off_boundaries(x, y)) {
+        if flow_field.off_boundaries(x, y) {
             break;
         }
 
@@ -384,7 +374,7 @@ pub fn draw_curve(curve_id:u32,
         x = x + x_step;
         y = y + y_step;
 
-        if (!density_grid.is_valid_next_step(x, y)) {
+        if !density_grid.is_valid_next_step(x, y) {
             break;
         }
 
@@ -404,13 +394,12 @@ pub fn even_spaced_curves(x_start:f64,
     min_steps_allowed:u8,
     step_length:f64,
     d_sep:f64,
-    flow_field:FlowField,
-    density_grid:DensityGrid) -> Vec<Curve> {
+    flow_field:&FlowField,
+    density_grid:&mut DensityGrid) -> Vec<Curve> {
 
     let mut curves = Vec::with_capacity(n_curves as usize);
     let mut curve_array_index = 0;
     let mut curve_id = 0;
-    let mut density_grid = density_grid;
 
     let x = x_start;
     let y = y_start;
@@ -423,22 +412,22 @@ pub fn even_spaced_curves(x_start:f64,
         density_grid
     );
 
+    density_grid.insert_curve_coords(&curve);
     curves.push(curve);
-    density_grid.insert_curve_coords(curve);
     curve_array_index += 1;
 
 
     while curve_id < n_curves && curve_array_index < n_curves {
         let mut queue = SeedPointsQueue::new(n_steps);
-        if (curve_id >= curves.len() as u32) {
+        if curve_id >= curves.len() as u32 {
             // There is no more curves to be analyzed in the queue
             break;
         }
         let curve_usize = curve_id as usize;
-        queue = collect_seedpoints(curves[curve_usize], d_sep);
+        queue = collect_seedpoints(&curves[curve_usize], d_sep);
         for p in queue._points {
             // check if it is valid given the current state
-            if (density_grid.is_valid_next_step(p.x, p.y)) {
+            if density_grid.is_valid_next_step(p.x, p.y) {
                 // if it is, draw the curve from it
                 let curve = draw_curve(
                     curve_array_index,
@@ -449,13 +438,13 @@ pub fn even_spaced_curves(x_start:f64,
                     density_grid
                 );
 
-            if (curve._steps_taken < min_steps_allowed as u32) {
+                if curve._steps_taken < min_steps_allowed as u32 {
                     continue;
                 }
 
-                curves.push(curve);
                 // insert this new curve into the density grid
-                density_grid.insert_curve_coords(curve);
+                density_grid.insert_curve_coords(&curve);
+                curves.push(curve);
                 curve_array_index += 1;
             }
         }
@@ -474,7 +463,7 @@ fn main() {
 
     let flow_field_width:u8 = 120;
     let flow_field_height:u8 = 120;
-    let n_steps:u8 = 30;
+    let n_steps:u32 = 30;
     let min_steps_allowed:u8 = 5;
     let n_curves:u32 = 1500;
     let step_length:f64 = 0.01 * f64::from(flow_field_width);
@@ -483,11 +472,50 @@ fn main() {
     let density_grid_height = calc_density_dim(flow_field_height, d_sep);
 
     let flow_field = FlowField::new(50, flow_field_width, flow_field_height);
+    let mut density_grid = DensityGrid::new(
+        d_sep,
+        density_grid_width,
+        density_grid_height,
+        4000
+    );
+
+    let curves = even_spaced_curves(
+        45.0, 28.0,
+        n_curves,
+        n_steps,
+        min_steps_allowed,
+        step_length,
+        d_sep,
+        &flow_field,
+        &mut density_grid
+    );
 
 
+    let file = File::create("curves.csv").unwrap();
+    let mut writer = BufWriter::new(file);
+    writer.write("curve_id;x;y;direction;step_id\n".as_bytes()).unwrap();
+    for curve in curves {
+        let curve_id = curve._curve_id;
+        let steps_taken = curve._steps_taken as usize;
+        if steps_taken == 0 {
+            continue;
+        }
+    
+        for i in 0..steps_taken {
+            let line = format!(
+                "{};{};{};{};{}\n",
+                curve_id,
+                curve._x[i],
+                curve._y[i],
+                curve._direction[i],
+                curve._step_id[i]
+            );
+            writer.write(&line.as_bytes()).unwrap();
+        }
+    }
+    //serde_json::to_writer(&mut writer, &curves);
+    writer.flush().unwrap();
 
-
-    println!("Hello, world!");
 }
 
 
