@@ -19,5 +19,12 @@ Just to clarify the objective of the algorithm,
 the two images below demonstrates the effect of the algorithm
 in the process of drawing multiple curves in a flow field.
 
+First, an example of curves drawn without the Jobard and Lefer (1997) algorithm:
+
 ![Curves drawn without the Jobard and Lefer algorithm](https://pedro-faria.netlify.app/posts/2024/2024-02-19-flow-even/overlap.png)
+
+
+Now, the same example, but this time, using the Jobard and Lefer algorithm. You
+can see that we get non-overlapping curves that are evenly-spaced between each other:
+
 ![Non-Overlapping curves drawn with the Jobard and Lefer algorithm](https://pedro-faria.netlify.app/posts/2024/2024-02-19-flow-even/even_curves2.png)
