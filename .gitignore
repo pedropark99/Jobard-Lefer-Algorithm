@@ -1,5 +1,6 @@
-even_spaced_curves
 *.cmake
 **/CMakeCache.txt
 Makefile
 **/CMakeFiles/
+Rust/even_spaced_curves/target/
+
